@@ -1,90 +1,84 @@
 # Restful-Booker test suite
 
-Playwright tests for the Restful-Booker sandbox, covering the booking API and the
-hotel website's UI. Written for the SQA assessment.
+Playwright tests for the Restful-Booker sandbox — the booking API and the hotel
+site's UI. Did this for the SQA assessment.
 
 - API: https://restful-booker.herokuapp.com
 - UI: https://automationintesting.online
 
 ## Setup
 
-Node 18 or newer.
+Need Node 18+. Then just:
 
 ```bash
 npm install
 ```
 
-That pulls the dependencies and downloads Chromium (the `prepare` script runs on
-its own, no second command needed).
+That installs everything and pulls down Chromium on its own (it's the `prepare`
+script), so there's no second command to remember.
 
-## Running
-
-```bash
-npm test            # everything, ~20s
-npm run test:smoke  # the 5 must-pass tests
-npm run test:api    # API only, doesn't need a browser
-npm run test:ui     # UI only
-```
-
-If you're behind a proxy that blocks the browser download, `npm run test:api`
-still works — those tests use Playwright's request client, not a browser.
-
-## What's here
-
-```
-tests/api/booking-api.spec.ts   10 API tests
-tests/ui/booking-ui.spec.ts      4 UI tests
-pages/                           page objects for the contact form and admin login
-TEST-PLAN.md                     scope, risks, coverage matrix
-BUG-REPORT.md                    what I found while exploring
-```
-
-Tests are tagged `@smoke` or `@regression`. Smoke is the happy path plus the auth
-boundary — the things that should block a build. Everything else is regression.
-
-I tagged the "PUT without a token" test as smoke rather than regression on purpose.
-If authorisation breaks, that's not a quality issue to catch before release, it's
-something you want failing immediately.
-
-## The password in the brief is wrong for the API
-
-The brief says `admin` / `password` for both layers. That works on the UI admin
-panel, but the API wants `password123`:
-
-| | username | password |
-|---|---|---|
-| UI admin panel | admin | password |
-| API `/auth` | admin | password123 |
-
-Send `password` to `/auth` and you get `{"reason":"Bad credentials"}` back. Send
-`password123` to the UI login form and it says "Invalid credentials". They look
-like one product but they don't share a login. Took me a while to work that out,
-so it's worth flagging.
-
-## Notes on a few choices
-
-**Exact status codes, not ranges.** Delete returns `201`, which is odd, but I
-assert `201` rather than `[200, 201]`. A range that accepts both the right and the
-wrong answer won't tell you when the contract changes, which is the whole job.
-
-**Two tests assert broken behaviour.** The API happily accepts a booking with a
-negative price, or with checkout before checkin. Both are in BUG-REPORT.md. The
-tests pin what it does *today*, with a comment to flip them to `400` once someone
-fixes it — that way the fix can't land without anyone noticing.
-
-**The admin login test checks for "Rooms", not "Logout".** The header renders a
-Logout link even when you're logged out, so asserting on it would pass no matter
-what. That's in the bug report too.
-
-**Shared sandbox.** Other people are writing to the same instance, so every test
-creates the record it works on and never asserts on global state. The list test
-only checks its own booking is in there, not the length or the order.
-
-## Pushing this up
+## Running it
 
 ```bash
-git remote add origin <repo-url>
-git push -u origin main
+npm test            # runs everything, takes about 20s
+npm run test:smoke  # just the 5 that have to pass
+npm run test:api    # API tests, no browser needed
+npm run test:ui     # UI tests only
 ```
 
-Then add https://github.com/Dehya as a collaborator under Settings → Collaborators.
+If your network blocks the Chromium download, `npm run test:api` still works fine
+since those tests just hit the API directly, no browser involved.
+
+## What's in here
+
+- `tests/api/booking-api.spec.ts` — 10 API tests
+- `tests/ui/booking-ui.spec.ts` — 4 UI tests
+- `pages/` — page objects, one for the contact form, one for admin login
+- `TEST-PLAN.md` — scope, the risks I focused on, coverage matrix
+- `BUG-REPORT.md` — what I found poking around
+
+Tests are tagged `@smoke` or `@regression`. Smoke is the stuff that should block a
+build — happy path plus the auth check. Regression is everything else.
+
+I put the "PUT without a token" test in smoke on purpose, not regression. If
+authorisation ever breaks that's not something you catch in a pre-release sweep,
+you want it failing the build right away.
+
+## Heads up about the password
+
+The brief gives `admin` / `password` for both the UI and the API. That's only
+right for the UI. The API wants `password123` instead:
+
+- UI admin panel → admin / password
+- API `/auth` → admin / password123
+
+Send `password` to `/auth` and it just says `{"reason":"Bad credentials"}`. Send
+`password123` to the UI login and it says "Invalid credentials". Same product,
+different logins apparently. Wasted a bit of time on this so figured I'd save you
+the trouble.
+
+## Why some tests are written the way they are
+
+Delete returns `201`, which is a weird choice for a delete, but I assert exactly
+`201` instead of something loose like `[200, 201]`. If I let both pass, the test
+stops being able to tell me when that changes.
+
+Two of the tests are basically asserting a bug. The API lets you create a booking
+with a negative price, and one where checkout is before checkin. Both are in the
+bug report. Rather than skip them I wrote them to check the current (broken)
+behaviour, with a note to flip the expectation to `400` whenever someone actually
+fixes it — so the fix can't quietly slip in unnoticed.
+
+The admin login test checks for "Rooms" on the page, not "Logout". Turns out the
+site shows a Logout link even when you're not logged in, so checking for that
+would've passed regardless of whether login actually worked. That one's in the bug
+report too.
+
+Also — it's a public shared sandbox, other people are using it while the tests
+run. So everything creates its own data and doesn't assume anything about what
+else is in there. The "list bookings" test only checks that its own booking shows
+up, not the count or order of anything else.
+
+## Repo
+
+Already pushed — https://github.com/IrtassamBaloch/irtassam-sqa-assessment
