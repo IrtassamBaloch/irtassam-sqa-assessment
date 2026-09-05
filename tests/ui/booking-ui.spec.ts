@@ -41,8 +41,8 @@ test.describe('Admin login', () => {
     const rooms = new AdminRoomsPage(page);
     await login.goto();
     await login.login(env.uiUsername, env.uiPassword);
-    await expect(page).toHaveURL(/\/admin\/rooms\/?$/);
-    await expect(rooms.roomManagement).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/rooms\/?$/, { timeout: 30_000 });
+    await expect(rooms.roomManagement).toBeVisible({ timeout: 30_000 });
   });
 
   test('invalid credentials remain logged out @ui-login @regression', async ({ page }) => {

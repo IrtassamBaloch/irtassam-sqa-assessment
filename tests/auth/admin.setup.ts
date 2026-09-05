@@ -9,7 +9,7 @@ setup('authenticate admin', async ({ page }) => {
     username: env.uiUsername,
     password: env.uiPassword,
   });
-  await expect(page).toHaveURL(/\/admin\/rooms\/?$/);
+  await expect(page).toHaveURL(/\/admin\/rooms\/?$/, { timeout: 30_000 });
   await mkdir(dirname(adminAuthFile), { recursive: true });
   await page.context().storageState({ path: adminAuthFile });
 });

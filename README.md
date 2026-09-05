@@ -39,6 +39,10 @@ npm run typecheck        # TypeScript compilation without output
 npm run report           # open the latest HTML report
 ```
 
+## Continuous Integration
+
+GitHub Actions runs TypeScript validation and the complete Playwright suite on pushes and pull requests to `main`. It installs Chromium and its Linux system dependencies on `ubuntu-latest`, uses one worker with retries through `CI=true`, and uploads the HTML report plus failure artifacts. The workflow can also be started manually from the Actions tab.
+
 ## Structure
 
 ```text

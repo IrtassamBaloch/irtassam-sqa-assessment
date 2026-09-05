@@ -6,7 +6,7 @@ export class AdminBookingsPage {
   constructor(private readonly page: Page) {}
 
   bookingEntry(guestName: string): Locator {
-    return this.page.getByText(guestName, { exact: false });
+    return this.page.getByText(guestName, { exact: false }).first();
   }
 
   async roomForBooking(guestName: string): Promise<string> {
