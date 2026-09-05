@@ -148,6 +148,8 @@ test.describe('Booking API', () => {
     expect(await response.text()).toBe('Not Found');
   });
 
+  // Bonus: PATCH is a common source of silent data loss, so this proves fields
+  // omitted from the request remain unchanged in both response and storage.
   test('partial update preserves fields not supplied @regression', async ({ request }) => {
     const original = createBookingData({ firstname: `PatchTarget${Date.now()}` });
     const created = await createBooking(request, original);
@@ -168,6 +170,8 @@ test.describe('Booking API', () => {
     }
   });
 
+  // Bonus: create can return success even when indexing fails; this checks the
+  // new record reaches the collection without relying on shared list ordering.
   test('booking list includes the test-created record @regression', async ({ request }) => {
     const created = await createBooking(request, createBookingData({ firstname: 'ListCheck' }));
     const token = await login(request);
@@ -182,6 +186,8 @@ test.describe('Booking API', () => {
     }
   });
 
+  // Bonus: reversed dates threaten availability and billing calculations, so
+  // the regression pins the sandbox's observed validation gap.
   test('checkout before checkin is wrongly accepted @regression', async ({ request }) => {
     const created = await createBooking(request, reversedDateBookingData);
     const token = await login(request);

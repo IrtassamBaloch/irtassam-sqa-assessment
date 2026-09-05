@@ -60,10 +60,7 @@ test-data/
 tests/
   api/booking-api.spec.ts        API contract and lifecycle coverage
   auth/admin.setup.ts            one-time UI login setup
-  ui/admin-dashboard.spec.ts     saved-auth protected-page check
-  ui/admin-login.spec.ts         valid and invalid login
-  ui/contact-form.spec.ts        submission and validation
-  ui/reservation.spec.ts         reversed-date price regression
+  ui/booking-ui.spec.ts          required UI scenarios in one deliverable
 utils/
   login.utils.ts                 reusable admin login and auth-state path
 playwright.config.ts             projects, artifacts, retries, and reporters

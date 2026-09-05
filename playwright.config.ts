@@ -25,17 +25,20 @@ export default defineConfig({
     },
     {
       name: 'ui-login',
-      testMatch: /tests[\\/]ui[\\/]admin-login\.spec\.ts/,
+      testMatch: /tests[\\/]ui[\\/]booking-ui\.spec\.ts/,
+      grep: /@ui-login/,
       use: { ...devices['Desktop Chrome'], baseURL: env.uiBaseUrl, actionTimeout: 5000 },
     },
     {
       name: 'ui-public',
-      testMatch: /tests[\\/]ui[\\/](contact-form|reservation)\.spec\.ts/,
+      testMatch: /tests[\\/]ui[\\/]booking-ui\.spec\.ts/,
+      grep: /@ui-public/,
       use: { ...devices['Desktop Chrome'], baseURL: env.uiBaseUrl, actionTimeout: 5000 },
     },
     {
       name: 'ui-authenticated',
-      testMatch: /tests[\\/]ui[\\/]admin-dashboard\.spec\.ts/,
+      testMatch: /tests[\\/]ui[\\/]booking-ui\.spec\.ts/,
+      grep: /@ui-authenticated/,
       dependencies: ['auth-setup'],
       use: {
         ...devices['Desktop Chrome'],
