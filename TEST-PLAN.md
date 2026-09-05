@@ -1,134 +1,111 @@
-# Test plan — Booking CRUD
+# Test Plan - Restful-Booker API and Booking UI
 
-Irtassam · Restful-Booker (`https://restful-booker.herokuapp.com`)
+## Objective
+
+Validate the booking lifecycle and the highest-risk public and administrative UI flows for:
+
+- API: `https://restful-booker.herokuapp.com`
+- UI: `https://automationintesting.online`
+
+The suite checks behavior at public boundaries: HTTP contracts, stored booking state, browser-visible outcomes, and authorization. It does not inspect implementation details or database state.
 
 ## Scope
 
-The booking lifecycle — create, read, update, partial update, delete — plus the
-`/auth` token flow that guards the mutating half of it.
+### In scope
 
-This is where the money is. Every booking a guest makes and every change an admin
-applies goes through these five operations, so a bug here either loses a customer's
-reservation or gets the price wrong. That's why it's the part worth testing first.
-
-What I'm checking:
-
-- A booking comes back the way it went in, with the right field *types*, not just
-  the right field names.
-- Authorisation actually holds — a rejected write must also leave the record alone.
-- Where the docs and the real behaviour disagree, the real behaviour gets pinned
-  in a test instead of living in someone's head.
-- Delete really deletes.
+- API authentication with valid, invalid, missing, and tampered credentials.
+- Booking create, retrieve, list, full update, partial update, and delete.
+- Booking schema, primitive types, persistence, and post-deletion state.
+- Required-field, date-ordering, and price validation behavior.
+- Contact-form submission and validation.
+- Valid and invalid admin login.
+- Reuse of authenticated admin browser state.
+- Reversed UI booking dates and the resulting price calculation.
 
 ### Out of scope
 
-- **Payments** — not implemented in the sandbox, `totalprice` is just a number in a field.
-- **Load and performance** — it's shared public infrastructure. Hammering it would be
-  rude, and the numbers would measure other people's traffic as much as mine.
-- **Cross-browser** — UI runs on Chromium only. Worth doing, but it's its own job.
-- **Security testing** beyond authorisation checks — different discipline.
-- **Admin room and branding management** — outside the booking feature.
+- Payments; `totalprice` is only a sandbox field.
+- Load and performance testing against shared public infrastructure.
+- Penetration testing beyond authentication and authorization checks.
+- Cross-browser coverage beyond Chromium.
+- Native mobile testing.
+- Database-level verification and third-party service validation.
+- Creating or modifying persistent admin rooms during automated regression.
 
-### One constraint worth naming
+## Test Environment
 
-The sandbox is shared and other people are writing to it while the suite runs. So
-every test creates the record it operates on, and nothing asserts on global state.
-The list test checks that its own booking is present — not the list length, not the
-ordering, since neither is mine to predict.
+Node.js 18+ and Chromium are required. URLs and credentials are read from an ignored `.env` file. The UI uses `admin/password`; the API uses `admin/password123`.
 
-## Top 5 risks
+The targets are shared public sandboxes. Tests create their own records, use generated identifiers where collisions are plausible, and never assert global list length or ordering. Records created by API tests are deleted where the scenario does not itself verify deletion.
 
-**1. Authorisation that isn't really there**
+## Top Five Risks
 
-`PUT`, `PATCH` and `DELETE` are supposed to need a token. If that check is missing or
-shallow, anyone can edit or delete any booking, anonymously. Worst thing that could
-plausibly be wrong here.
+### 1. Authorization does not protect mutations
 
-*How I test it:* hit each mutating endpoint with no token and expect `403` — then
-re-read the record and confirm it didn't change. A `403` that still lets the write
-through is far worse than a clean rejection, and checking the status alone can't
-tell those apart.
+An anonymous or tampered request could alter or delete a booking. The suite sends unauthenticated PUT, PATCH, and DELETE requests plus a PATCH with a false token. It verifies `403 Forbidden` and rereads the booking to prove its state did not change.
 
-**2. Validation gaps letting impossible bookings in**
+### 2. Invalid dates or prices are accepted
 
-Negative prices, checkout before checkin, absurd strings. Garbage that gets stored
-and then breaks whatever reads it later.
+Checkout before checkin can create a negative stay and negative total; a negative API price can act like a credit. API and UI regression tests pin the observed broken behavior so a product fix causes an intentional expectation update.
 
-*How I test it:* boundary values on each field — price negative/zero/huge, dates
-reversed/identical/malformed, strings empty/very long. **This one turned out to be
-real** — see bugs 1 and 2. Both are now pinned by tests asserting the broken
-behaviour, so the eventual fix can't land quietly.
+### 3. Updates lose unrelated data
 
-**3. Docs and reality disagreeing**
+PUT should replace the full record and PATCH should merge only supplied fields. Tests compare complete responses and follow with GET requests to prove persistence and preservation.
 
-Restful-Booker has a few of these: `200` on failed auth, `201` on delete, `500` on a
-missing field. Anyone building a client from the docs gets surprised.
+### 4. Response types or error contracts drift
 
-*How I test it:* assert exactly what it does, with a comment saying why the number
-is what it is. Deliberately not writing `expect([200, 201]).toContain(...)` — a range
-that accepts the right and wrong answer both will never tell you the contract moved.
+A stringified number or boolean can silently break clients. Create assertions compare the complete payload and primitive types. Known plain-text `403`, `404`, and `500` responses are checked with `response.text()` and exact status codes.
 
-**4. Types quietly changing**
+### 5. Authentication tests produce false positives
 
-`totalprice` coming back as `"123"` instead of `123`, or `depositpaid` as the string
-`"false"` — which is truthy, so a client's `if (depositpaid)` silently inverts.
-A `toHaveProperty` check sails right past this.
+The logged-out UI exposes misleading navigation, and API auth failures return HTTP 200. UI success requires `/admin/rooms` plus protected room content; invalid login must remain on `/admin`. API failure requires the exact `{ "reason": "Bad credentials" }` body.
 
-*How I test it:* full `toEqual` on the create response plus explicit `typeof` checks
-on the number and boolean fields.
+## Coverage Matrix
 
-**5. Updates losing data**
+| Area | Scenario | Smoke | Sanity | Regression | Negative |
+|---|---|:---:|:---:|:---:|:---:|
+| API auth | Valid credentials return token | X | X | | |
+| API auth | Invalid credentials return reason | | | X | X |
+| Booking CRUD | Create, get, PUT, delete lifecycle | X | X | | |
+| Booking auth | Missing/tampered auth cannot PUT/PATCH/DELETE | X | | X | X |
+| Create validation | Missing firstname returns observed 500 | | | X | X |
+| Retrieve | Nonexistent booking returns 404 | | | X | X |
+| PATCH | Selected field changes; others persist | | | X | |
+| List | Newly created booking appears | | | X | |
+| Date validation | Reversed dates are accepted by API | | | X | X |
+| Price validation | Negative price is accepted by API | | | X | X |
+| Contact UI | Valid enquiry submits | X | X | | |
+| Contact UI | Empty message is rejected | | | X | X |
+| Admin UI | Valid login reaches protected rooms | X | X | | |
+| Admin UI | Invalid login remains logged out | | | X | X |
+| Admin UI | Saved cookie state opens protected rooms | | X | X | |
+| Reservation UI | Reversed dates produce negative total | | | X | X |
 
-`PUT` replaces, `PATCH` merges. If `PATCH` drops the fields you didn't send, data
-disappears with no error at all.
+## Tagging Strategy
 
-*How I test it:* after an update, assert on the fields that *should not* have changed
-as well as the one that should. Checking only the field you modified is the usual
-mistake — it can't see collateral damage.
+- `@smoke`: five business-critical checks used as a build gate.
+- `@sanity`: five focused checks for quick environment confidence.
+- `@regression`: twelve broader behavior and boundary checks.
 
-## Coverage matrix
+There are 16 executable scenarios plus one authentication setup test, for 17 discovered tests. Tag runs involving the authenticated dashboard also execute its `auth-setup` dependency.
 
-| Operation | Smoke | Regression | Negative |
-|---|:---:|:---:|:---:|
-| Auth token | X | X | X |
-| Create booking | X | X | X |
-| Get booking | X | X | X |
-| Update booking (PUT) | X | X | X |
-| Partial update (PATCH) | | X | |
-| Delete booking | X | X | |
+## Playwright Projects
 
-Which test covers what:
+| Project | Responsibility | Authentication |
+|---|---|---|
+| `api` | Booking API suite | Token created per protected scenario |
+| `ui-login` | Valid and invalid login behavior | Starts logged out |
+| `ui-public` | Contact and reservation behavior | None |
+| `auth-setup` | Generates admin browser state once | Logs in from `.env` |
+| `ui-authenticated` | Protected admin checks | Reuses `playwright/.auth/admin.json` |
 
-| | Test |
-|---|---|
-| Auth, smoke | `POST /auth with valid credentials` |
-| Auth, negative | `POST /auth with invalid credentials` |
-| Create, smoke | lifecycle test — structure and types |
-| Create, negative | missing firstname; checkout before checkin; negative price |
-| Get, smoke | lifecycle test |
-| Get, negative | `GET non-existent booking returns 404` |
-| Update, smoke | lifecycle test |
-| Update, negative | `PUT without an auth token returns 403` |
-| Partial update | `PATCH only changes the field sent` |
-| Delete, smoke | lifecycle test — `201`, then `404` on re-read |
+## Entry and Exit Criteria
 
-### Gaps I know about
+Testing can start when dependencies, Chromium, and all six `.env` values are available and both sandboxes respond. The assessment is ready for submission when TypeScript, API, UI, smoke, sanity, regression, and complete-suite commands pass, generated artifacts are ignored, and documented counts match `playwright test --list`.
 
-Two cells are empty and I'd rather say so than pad them:
+## Known Constraints and Remaining Gaps
 
-- **PATCH without a token** should return `403` the same way PUT does. Not automated yet.
-  First thing I'd add.
-- **DELETE without a token** — I checked this by hand during exploratory testing (it
-  returns `403` and the booking survives), but there's no test for it.
-
-Both are five-minute additions to a pattern that already exists. An honest map of what
-isn't covered is more useful to whoever picks this up than a grid of uniform ticks.
-
-## Tagging
-
-`@smoke` is the build gate: happy path plus the auth boundary, five tests, runs in
-about nine seconds. `@regression` is everything, run before release.
-
-The auth-failure test sits in smoke rather than regression deliberately. Authorisation
-breaking isn't a defect you catch in a pre-release sweep — you want it red the moment
-it happens.
+- The public sandboxes can respond slowly or reset without notice; environment failures must be distinguished from assertion failures.
+- Browser coverage is Chromium only.
+- Contact submission writes a synthetic message to the public sandbox; data uniqueness reduces collisions but the UI offers no public cleanup path.
+- The suite does not submit a reservation or mutate admin room data during regression. Those flows were explored manually and are documented separately.

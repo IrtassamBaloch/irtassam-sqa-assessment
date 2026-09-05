@@ -1,84 +1,88 @@
-# Restful-Booker test suite
+# Restful-Booker Playwright Assessment
 
-Playwright tests for the Restful-Booker sandbox — the booking API and the hotel
-site's UI. Did this for the SQA assessment.
+TypeScript Playwright coverage for the Restful-Booker API and the Automation in Testing booking UI.
 
-- API: https://restful-booker.herokuapp.com
-- UI: https://automationintesting.online
+## Prerequisites
+
+- Node.js 18 or newer
+- Network access to both public sandbox URLs
 
 ## Setup
-
-Need Node 18+. Then just:
 
 ```bash
 npm install
 ```
 
-That installs everything and pulls down Chromium on its own (it's the `prepare`
-script), so there's no second command to remember.
+`npm install` runs the `prepare` script and installs Chromium. Create `.env` from `.env.example`:
 
-## Running it
-
-```bash
-npm test            # runs everything, takes about 20s
-npm run test:smoke  # just the 5 that have to pass
-npm run test:api    # API tests, no browser needed
-npm run test:ui     # UI tests only
+```env
+API_BASE_URL=https://restful-booker.herokuapp.com
+API_USERNAME=admin
+API_PASSWORD=password123
+UI_BASE_URL=https://automationintesting.online
+UI_USERNAME=admin
+UI_PASSWORD=password
 ```
 
-If your network blocks the Chromium download, `npm run test:api` still works fine
-since those tests just hit the API directly, no browser involved.
+The API and UI passwords are intentionally different. Configuration validation stops immediately with a clear error when any required value is absent. `.env` is ignored by Git.
 
-## What's in here
+## Commands
 
-- `tests/api/booking-api.spec.ts` — 10 API tests
-- `tests/ui/booking-ui.spec.ts` — 4 UI tests
-- `pages/` — page objects, one for the contact form, one for admin login
-- `TEST-PLAN.md` — scope, the risks I focused on, coverage matrix
-- `BUG-REPORT.md` — what I found poking around
+```bash
+npm test                 # complete suite
+npm run test:api         # API project only
+npm run test:ui          # all UI projects
+npm run test:smoke       # five critical scenarios
+npm run test:sanity      # five environment-confidence scenarios
+npm run test:regression  # twelve regression scenarios
+npm run typecheck        # TypeScript compilation without output
+npm run report           # open the latest HTML report
+```
 
-Tests are tagged `@smoke` or `@regression`. Smoke is the stuff that should block a
-build — happy path plus the auth check. Regression is everything else.
+## Structure
 
-I put the "PUT without a token" test in smoke on purpose, not regression. If
-authorisation ever breaks that's not something you catch in a pre-release sweep,
-you want it failing the build right away.
+```text
+config/
+  env.ts                         validated environment contract
+pages/
+  AdminLoginPage.ts              admin login actions and feedback
+  AdminRoomsPage.ts              protected room-management page
+  ContactFormComponent.ts        contact form actions and results
+  HomePage.ts                    availability search and room selection
+  ReservationPage.ts             reservation price-summary locators
+playwright/.auth/
+  admin.json                     generated authenticated cookie state
+test-data/
+  api/booking.data.ts            typed booking factories and boundary data
+  ui/admin.data.ts               invalid login and dashboard expectations
+  ui/contact.data.ts             contact fixtures and unique-data factory
+  ui/reservation.data.ts         valid and reversed booking dates
+tests/
+  api/booking-api.spec.ts        API contract and lifecycle coverage
+  auth/admin.setup.ts            one-time UI login setup
+  ui/admin-dashboard.spec.ts     saved-auth protected-page check
+  ui/admin-login.spec.ts         valid and invalid login
+  ui/contact-form.spec.ts        submission and validation
+  ui/reservation.spec.ts         reversed-date price regression
+utils/
+  login.utils.ts                 reusable admin login and auth-state path
+playwright.config.ts             projects, artifacts, retries, and reporters
+TEST-PLAN.md                     scope, risks, and coverage matrix
+BUG-REPORT.md                    reproduced product defects
+```
 
-## Heads up about the password
+Generated `playwright/.auth`, `test-results`, `playwright-report`, and `blob-report` directories are ignored.
 
-The brief gives `admin` / `password` for both the UI and the API. That's only
-right for the UI. The API wants `password123` instead:
+## Design Decisions
 
-- UI admin panel → admin / password
-- API `/auth` → admin / password123
+API tests use Playwright request contexts and do not launch browsers. Each mutation scenario owns its booking data and avoids global-state assertions because the target is shared.
 
-Send `password` to `/auth` and it just says `{"reason":"Bad credentials"}`. Send
-`password123` to the UI login and it says "Invalid credentials". Same product,
-different logins apparently. Wasted a bit of time on this so figured I'd save you
-the trouble.
+Page objects contain locators and user actions; assertions remain in specs. Module-specific test-data files keep payloads and expected values out of page objects. There is no generic base page because the current flows do not share meaningful behavior.
 
-## Why some tests are written the way they are
+The `auth-setup` project logs in once and writes cookie-based `storageState`. Only `ui-authenticated` depends on it. Login tests deliberately start without stored authentication so valid and invalid credentials remain independently testable.
 
-Delete returns `201`, which is a weird choice for a delete, but I assert exactly
-`201` instead of something loose like `[200, 201]`. If I let both pass, the test
-stops being able to tell me when that changes.
+Known API quirks are asserted exactly: failed authentication returns HTTP 200 with a reason body, delete returns 201 with `Created`, and some errors are plain text. See `BUG-REPORT.md` for expected-versus-observed behavior.
 
-Two of the tests are basically asserting a bug. The API lets you create a booking
-with a negative price, and one where checkout is before checkin. Both are in the
-bug report. Rather than skip them I wrote them to check the current (broken)
-behaviour, with a note to flip the expectation to `400` whenever someone actually
-fixes it — so the fix can't quietly slip in unnoticed.
+## Public Sandbox Notes
 
-The admin login test checks for "Rooms" on the page, not "Logout". Turns out the
-site shows a Logout link even when you're not logged in, so checking for that
-would've passed regardless of whether login actually worked. That one's in the bug
-report too.
-
-Also — it's a public shared sandbox, other people are using it while the tests
-run. So everything creates its own data and doesn't assume anything about what
-else is in there. The "list bookings" test only checks that its own booking shows
-up, not the count or order of anything else.
-
-## Repo
-
-Already pushed — https://github.com/IrtassamBaloch/irtassam-sqa-assessment
+The services are shared and occasionally slow. A timeout or reset is an environment signal, not a reason to loosen business assertions. API tests clean up their generated bookings where possible. The UI contact test submits synthetic data, while reservation and admin-room regression tests avoid persistent writes.

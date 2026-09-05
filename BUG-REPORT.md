@@ -9,7 +9,51 @@ actual requests, not from the docs.
 
 ---
 
-### Bug 1: Booking accepted with checkout before checkin
+### Bug 1: Reversed dates produce a negative stay price while reservation remains enabled
+
+**Severity:** High
+**Layer:** UI / business logic
+**Environment:** Chromium, `GET /reservation/1?checkin=2026-09-10&checkout=2026-09-09`
+
+**Steps to Reproduce:**
+1. Enter check-in `10/09/2026` and check-out `09/09/2026`.
+2. Select **Check Availability**.
+3. Open the Single room returned by the search.
+4. Inspect the price summary and reservation action.
+
+**Expected Result:**
+The reversed date range is rejected before rooms are offered, and reservation cannot continue.
+
+**Actual Result:**
+The application offers rooms with the reversed dates in their links. The Single room summary displays `£100 x -1 nights`, subtotal `£-100`, and `Total £-60`; **Reserve Now** remains enabled.
+
+**Why This Matters:**
+The UI permits a logically impossible stay with a negative payable total. A user can proceed toward a reservation that downstream billing and inventory systems cannot safely interpret.
+
+---
+
+### Bug 2: Double and Suite cards use Single Room alternative text
+
+**Severity:** Low
+**Layer:** UI accessibility
+**Environment:** Chromium, homepage room listing
+
+**Steps to Reproduce:**
+1. Open the homepage.
+2. Inspect the accessible names of the Single, Double, and Suite room images.
+
+**Expected Result:**
+Each image describes its associated room, or decorative images use empty alternative text.
+
+**Actual Result:**
+All three images expose the accessible name `Single Room`, including the Double and Suite cards.
+
+**Why This Matters:**
+Screen-reader users receive incorrect room context, making the card content misleading and harder to compare.
+
+---
+
+### Bug 3: Booking accepted with checkout before checkin
 
 **Severity:** High
 **Layer:** API
@@ -43,7 +87,7 @@ those two dates now has a negative night count to deal with.
 
 ---
 
-### Bug 2: Booking accepted with a negative price
+### Bug 4: Booking accepted with a negative price
 
 **Severity:** High
 **Layer:** API
@@ -64,7 +108,7 @@ who can reach it can issue themselves one.
 
 ---
 
-### Bug 3: Missing required field returns 500 instead of 400
+### Bug 5: Missing required field returns 500 instead of 400
 
 **Severity:** Medium
 **Layer:** API
@@ -88,7 +132,7 @@ will sit there retrying something that can never succeed.
 
 ---
 
-### Bug 4: Failed login returns HTTP 200
+### Bug 6: Failed login returns HTTP 200
 
 **Severity:** Medium
 **Layer:** API
@@ -110,7 +154,7 @@ confusing 403.
 
 ---
 
-### Bug 5: Logged-out users see a "Logout" link
+### Bug 7: Logged-out users see a "Logout" link
 
 **Severity:** Low
 **Layer:** UI
