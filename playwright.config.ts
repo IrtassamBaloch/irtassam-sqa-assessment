@@ -13,7 +13,6 @@ export default defineConfig({
     timeout: 5000,
   },
   use: {
-    actionTimeout: 5000,
     screenshot: 'only-on-failure',
     trace: 'on-first-retry',
     video: 'retain-on-failure',
@@ -22,17 +21,17 @@ export default defineConfig({
     {
       name: 'auth-setup',
       testMatch: /tests[\\/]auth[\\/].*\.setup\.ts/,
-      use: { ...devices['Desktop Chrome'], baseURL: env.uiBaseUrl },
+      use: { ...devices['Desktop Chrome'], baseURL: env.uiBaseUrl, actionTimeout: 5000 },
     },
     {
       name: 'ui-login',
       testMatch: /tests[\\/]ui[\\/]admin-login\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'], baseURL: env.uiBaseUrl },
+      use: { ...devices['Desktop Chrome'], baseURL: env.uiBaseUrl, actionTimeout: 5000 },
     },
     {
       name: 'ui-public',
       testMatch: /tests[\\/]ui[\\/](contact-form|reservation)\.spec\.ts/,
-      use: { ...devices['Desktop Chrome'], baseURL: env.uiBaseUrl },
+      use: { ...devices['Desktop Chrome'], baseURL: env.uiBaseUrl, actionTimeout: 5000 },
     },
     {
       name: 'ui-authenticated',
@@ -41,13 +40,14 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         baseURL: env.uiBaseUrl,
+        actionTimeout: 5000,
         storageState: adminAuthFile,
       },
     },
     {
       name: 'api',
       testMatch: /tests[\\/]api[\\/].*\.spec\.ts/,
-      use: { baseURL: env.apiBaseUrl },
+      use: { baseURL: env.apiBaseUrl, actionTimeout: 15000 },
     },
   ],
 });
