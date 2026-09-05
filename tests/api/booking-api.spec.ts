@@ -1,173 +1,209 @@
 import { test, expect, APIRequestContext } from '@playwright/test';
+import { env } from '../../config/env';
+import {
+  BookingData,
+  bookingWithoutFirstname,
+  createBookingData,
+  negativePriceBookingData,
+  partialBookingUpdate,
+  reversedDateBookingData,
+  updatedBookingData,
+} from '../../test-data/api/booking.data';
 
-const apiBase = 'https://restful-booker.herokuapp.com';
+interface CreateBookingResponse {
+  bookingid: number;
+  booking: BookingData;
+}
 
-// Note: the API password is 'password123', not the 'password' in the brief.
-// That one only works on the UI admin panel.
-async function login(request: APIRequestContext) {
-  const resp = await request.post(`${apiBase}/auth`, {
-    data: { username: 'admin', password: 'password123' },
+async function login(request: APIRequestContext): Promise<string> {
+  const response = await request.post('/auth', {
+    data: { username: env.apiUsername, password: env.apiPassword },
   });
-  return (await resp.json()).token;
+  expect(response.status()).toBe(200);
+  const body = (await response.json()) as { token?: string; reason?: string };
+  if (!body.token) {
+    throw new Error(`API authentication failed: ${body.reason ?? 'token missing'}`);
+  }
+  return body.token;
 }
 
-function booking(overrides = {}) {
-  return {
-    firstname: 'Test',
-    lastname: 'User',
-    totalprice: 123,
-    depositpaid: false,
-    bookingdates: { checkin: '2024-01-01', checkout: '2024-01-05' },
-    additionalneeds: 'Breakfast',
-    ...overrides,
-  };
+async function createBooking(
+  request: APIRequestContext,
+  data: BookingData = createBookingData(),
+): Promise<CreateBookingResponse> {
+  const response = await request.post('/booking', { data });
+  expect(response.status()).toBe(200);
+  return response.json() as Promise<CreateBookingResponse>;
 }
 
-test.describe('Booking API tests', () => {
-  test('POST /auth with valid credentials @smoke', async ({ request }) => {
-    const resp = await request.post(`${apiBase}/auth`, {
-      data: { username: 'admin', password: 'password123' },
+async function deleteBooking(
+  request: APIRequestContext,
+  id: number,
+  token: string,
+): Promise<void> {
+  await request.delete(`/booking/${id}`, {
+    headers: { Cookie: `token=${token}` },
+  });
+}
+
+test.describe('Booking API', () => {
+  test('valid credentials return a token @smoke @sanity', async ({ request }) => {
+    const response = await request.post('/auth', {
+      data: { username: env.apiUsername, password: env.apiPassword },
     });
-    expect(resp.status()).toBe(200);
-    expect((await resp.json()).token).toBeTruthy();
+    expect(response.status()).toBe(200);
+    expect((await response.json()).token).toEqual(expect.any(String));
   });
 
-  // Bad credentials come back as 200, not 401. Asserting the reason string
-  // since the status tells us nothing.
-  test('POST /auth with invalid credentials @regression', async ({ request }) => {
-    const resp = await request.post(`${apiBase}/auth`, {
+  test('invalid credentials return the documented reason @regression', async ({ request }) => {
+    const response = await request.post('/auth', {
       data: { username: 'wrong', password: 'nope' },
     });
-    expect(resp.status()).toBe(200);
-    expect((await resp.json()).reason).toBe('Bad credentials');
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toEqual({ reason: 'Bad credentials' });
   });
 
-  test('Create, Get, Update, Delete booking lifecycle @smoke', async ({ request }) => {
-    const data = booking();
-
-    const create = await request.post(`${apiBase}/booking`, { data });
-    expect(create.status()).toBe(200);
-    const created = await create.json();
-    expect(typeof created.bookingid).toBe('number');
-
-    // Checking types too - a stringified "123" would sneak past a shape-only check.
-    expect(created.booking).toEqual(data);
+  test('create, get, replace, and delete lifecycle @smoke @sanity', async ({ request }) => {
+    const original = createBookingData();
+    const created = await createBooking(request, original);
+    expect(Number.isInteger(created.bookingid)).toBeTruthy();
+    expect(created.bookingid).toBeGreaterThan(0);
+    expect(created.booking).toEqual(original);
     expect(typeof created.booking.totalprice).toBe('number');
     expect(typeof created.booking.depositpaid).toBe('boolean');
 
-    const id = created.bookingid;
-
-    const get = await request.get(`${apiBase}/booking/${id}`);
+    const get = await request.get(`/booking/${created.bookingid}`);
     expect(get.status()).toBe(200);
-    expect((await get.json()).firstname).toBe(data.firstname);
+    expect(await get.json()).toEqual(original);
 
     const token = await login(request);
-
-    const put = await request.put(`${apiBase}/booking/${id}`, {
-      headers: { 'Content-Type': 'application/json', Cookie: `token=${token}` },
-      data: booking({ firstname: 'Updated' }),
+    const put = await request.put(`/booking/${created.bookingid}`, {
+      headers: { Cookie: `token=${token}` },
+      data: updatedBookingData,
     });
     expect(put.status()).toBe(200);
-    expect((await put.json()).firstname).toBe('Updated');
+    expect(await put.json()).toEqual(updatedBookingData);
 
-    // Delete returns 201, oddly. Pinning the exact code - a loose [200, 201]
-    // would keep passing if it ever changed.
-    const del = await request.delete(`${apiBase}/booking/${id}`, {
+    const persisted = await request.get(`/booking/${created.bookingid}`);
+    expect(persisted.status()).toBe(200);
+    expect(await persisted.json()).toEqual(updatedBookingData);
+
+    const deleted = await request.delete(`/booking/${created.bookingid}`, {
       headers: { Cookie: `token=${token}` },
     });
-    expect(del.status()).toBe(201);
+    expect(deleted.status()).toBe(201);
+    expect(await deleted.text()).toBe('Created');
 
-    const after = await request.get(`${apiBase}/booking/${id}`);
-    expect(after.status()).toBe(404);
+    const afterDelete = await request.get(`/booking/${created.bookingid}`);
+    expect(afterDelete.status()).toBe(404);
+    expect(await afterDelete.text()).toBe('Not Found');
   });
 
-  test('PUT /booking/:id without an auth token returns 403 @smoke', async ({ request }) => {
-    const create = await request.post(`${apiBase}/booking`, {
-      data: booking({ firstname: 'NoAuth' }),
-    });
-    const id = (await create.json()).bookingid;
-
-    const put = await request.put(`${apiBase}/booking/${id}`, {
-      headers: { 'Content-Type': 'application/json' },
-      data: booking({ firstname: 'Hijacked' }),
-    });
-    expect(put.status()).toBe(403);
-
-    // Also check nothing changed. A 403 with the write landing anyway
-    // would be the worse bug.
-    const after = await request.get(`${apiBase}/booking/${id}`);
-    expect((await after.json()).firstname).toBe('NoAuth');
-  });
-
-  // Missing a required field gives a 500, not a 400. See BUG-REPORT.md.
-  test('POST /booking with missing firstname returns 500 @regression', async ({ request }) => {
-    const { firstname, ...withoutFirstname } = booking();
-    const resp = await request.post(`${apiBase}/booking`, { data: withoutFirstname });
-    expect(resp.status()).toBe(500);
-  });
-
-  test('GET non-existent booking returns 404 @regression', async ({ request }) => {
-    const resp = await request.get(`${apiBase}/booking/999999999`);
-    expect(resp.status()).toBe(404);
-  });
-
-  // Added this one because PATCH is easy to get wrong - it should touch only the
-  // field you send and leave the rest alone.
-  test('Partial update (PATCH) only changes the field sent @regression', async ({ request }) => {
-    const create = await request.post(`${apiBase}/booking`, {
-      data: booking({ firstname: 'Patch' }),
-    });
-    const id = (await create.json()).bookingid;
+  test('missing and tampered authentication cannot mutate a booking @smoke @regression', async ({ request }) => {
+    const original = createBookingData({ firstname: 'Protected' });
+    const created = await createBooking(request, original);
     const token = await login(request);
 
-    const patch = await request.patch(`${apiBase}/booking/${id}`, {
-      headers: { 'Content-Type': 'application/json', Cookie: `token=${token}` },
-      data: { firstname: 'Patched' },
-    });
-    expect(patch.status()).toBe(200);
+    try {
+      const unauthenticatedPut = await request.put(`/booking/${created.bookingid}`, {
+        data: updatedBookingData,
+      });
+      expect(unauthenticatedPut.status()).toBe(403);
+      expect(await unauthenticatedPut.text()).toBe('Forbidden');
 
-    const patched = await patch.json();
-    expect(patched.firstname).toBe('Patched');
-    // The fields we didn't send should be untouched.
-    expect(patched.lastname).toBe('User');
-    expect(patched.totalprice).toBe(123);
+      const unauthenticatedPatch = await request.patch(`/booking/${created.bookingid}`, {
+        data: partialBookingUpdate,
+      });
+      expect(unauthenticatedPatch.status()).toBe(403);
+      expect(await unauthenticatedPatch.text()).toBe('Forbidden');
 
-    await request.delete(`${apiBase}/booking/${id}`, { headers: { Cookie: `token=${token}` } });
+      const tamperedPatch = await request.patch(`/booking/${created.bookingid}`, {
+        headers: { Cookie: 'token=not-a-valid-token' },
+        data: partialBookingUpdate,
+      });
+      expect(tamperedPatch.status()).toBe(403);
+      expect(await tamperedPatch.text()).toBe('Forbidden');
+
+      const unauthenticatedDelete = await request.delete(`/booking/${created.bookingid}`);
+      expect(unauthenticatedDelete.status()).toBe(403);
+      expect(await unauthenticatedDelete.text()).toBe('Forbidden');
+
+      const unchanged = await request.get(`/booking/${created.bookingid}`);
+      expect(unchanged.status()).toBe(200);
+      expect(await unchanged.json()).toEqual(original);
+    } finally {
+      await deleteBooking(request, created.bookingid, token);
+    }
   });
 
-  // And this one because create can succeed while the record never shows up
-  // in the list - worth checking both.
-  test('List bookings includes newly created booking @regression', async ({ request }) => {
-    const create = await request.post(`${apiBase}/booking`, {
-      data: booking({ firstname: 'List' }),
-    });
-    const id = (await create.json()).bookingid;
-
-    const list = await request.get(`${apiBase}/booking`);
-    expect(list.status()).toBe(200);
-    const items = await list.json();
-    // Only checking our own booking is there - it's a shared sandbox, so
-    // length and ordering aren't ours to assert on.
-    expect(items.find((i: any) => i.bookingid === id)).toBeTruthy();
+  test('missing firstname returns an internal server error @regression', async ({ request }) => {
+    const response = await request.post('/booking', { data: bookingWithoutFirstname() });
+    expect(response.status()).toBe(500);
+    expect(await response.text()).toBe('Internal Server Error');
   });
 
-  // Bug 1. Asserts what it does today, not what it should do.
-  // Flip to 400 when validation gets added.
-  test('Booking with checkout before checkin is wrongly accepted @regression', async ({ request }) => {
-    const resp = await request.post(`${apiBase}/booking`, {
-      data: booking({ bookingdates: { checkin: '2024-06-10', checkout: '2024-06-01' } }),
-    });
-    expect(resp.status()).toBe(200);
-    const dates = (await resp.json()).booking.bookingdates;
-    expect(dates.checkout < dates.checkin).toBeTruthy();
+  test('a nonexistent booking returns not found @regression', async ({ request }) => {
+    const response = await request.get('/booking/999999999');
+    expect(response.status()).toBe(404);
+    expect(await response.text()).toBe('Not Found');
   });
 
-  // Bug 2. Same idea - pins the bug so the fix can't land unnoticed.
-  test('Booking with negative totalprice is wrongly accepted @regression', async ({ request }) => {
-    const resp = await request.post(`${apiBase}/booking`, {
-      data: booking({ totalprice: -500 }),
-    });
-    expect(resp.status()).toBe(200);
-    expect((await resp.json()).booking.totalprice).toBe(-500);
+  test('partial update preserves fields not supplied @regression', async ({ request }) => {
+    const original = createBookingData({ firstname: `PatchTarget${Date.now()}` });
+    const created = await createBooking(request, original);
+    const token = await login(request);
+
+    try {
+      const patch = await request.patch(`/booking/${created.bookingid}`, {
+        headers: { Cookie: `token=${token}` },
+        data: partialBookingUpdate,
+      });
+      expect(patch.status()).toBe(200);
+      expect(await patch.json()).toEqual({ ...original, ...partialBookingUpdate });
+
+      const persisted = await request.get(`/booking/${created.bookingid}`);
+      expect(await persisted.json()).toEqual({ ...original, ...partialBookingUpdate });
+    } finally {
+      await deleteBooking(request, created.bookingid, token);
+    }
+  });
+
+  test('booking list includes the test-created record @regression', async ({ request }) => {
+    const created = await createBooking(request, createBookingData({ firstname: 'ListCheck' }));
+    const token = await login(request);
+
+    try {
+      const response = await request.get('/booking');
+      expect(response.status()).toBe(200);
+      const items = (await response.json()) as Array<{ bookingid: number }>;
+      expect(items.some(({ bookingid }) => bookingid === created.bookingid)).toBeTruthy();
+    } finally {
+      await deleteBooking(request, created.bookingid, token);
+    }
+  });
+
+  test('checkout before checkin is wrongly accepted @regression', async ({ request }) => {
+    const created = await createBooking(request, reversedDateBookingData);
+    const token = await login(request);
+
+    try {
+      expect(created.booking.bookingdates).toEqual({
+        checkin: '2026-09-10',
+        checkout: '2026-09-09',
+      });
+    } finally {
+      await deleteBooking(request, created.bookingid, token);
+    }
+  });
+
+  test('negative total price is wrongly accepted @regression', async ({ request }) => {
+    const created = await createBooking(request, negativePriceBookingData);
+    const token = await login(request);
+
+    try {
+      expect(created.booking.totalprice).toBe(-500);
+    } finally {
+      await deleteBooking(request, created.bookingid, token);
+    }
   });
 });
