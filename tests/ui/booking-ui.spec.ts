@@ -1,13 +1,19 @@
 import { test, expect } from '@playwright/test';
 import { AdminLoginPage } from '../../pages/AdminLoginPage';
 import { AdminRoomsPage } from '../../pages/AdminRoomsPage';
+import { AdminBookingsPage } from '../../pages/AdminBookingsPage';
 import { ContactFormComponent } from '../../pages/ContactFormComponent';
 import { HomePage } from '../../pages/HomePage';
 import { ReservationPage } from '../../pages/ReservationPage';
 import { env } from '../../config/env';
 import { invalidAdminCredentials } from '../../test-data/ui/admin.data';
 import { createContactData, emptyContactData } from '../../test-data/ui/contact.data';
-import { reversedDateReservationData } from '../../test-data/ui/reservation.data';
+import {
+  createReservationGuestData,
+  createValidReservationData,
+  reversedDateReservationData,
+} from '../../test-data/ui/reservation.data';
+import { createRoomData, createUpdatedRoomData } from '../../test-data/ui/room.data';
 
 test.describe('Contact form', () => {
   test('submits a valid enquiry @ui-public @smoke @sanity', async ({ page }, testInfo) => {
@@ -55,6 +61,71 @@ test('saved authentication opens room management @ui-authenticated @sanity @regr
   await rooms.goto();
   await expect(page).toHaveURL(/\/admin\/rooms\/?$/);
   await expect(rooms.roomManagement).toBeVisible();
+});
+
+test('admin creates, reads, updates, and deletes a room through the UI @ui-authenticated @regression', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const rooms = new AdminRoomsPage(page);
+  const room = createRoomData(`${testInfo.workerIndex}-${Date.now()}`);
+  const updatedRoom = createUpdatedRoomData(room.name);
+
+  await rooms.goto();
+  try {
+    await rooms.createRoom(room);
+    await expect(rooms.roomRow(room.name)).toContainText(
+      `${room.name}${room.type}${room.accessible}${room.price}${room.features.join(', ')}`,
+    );
+
+    await rooms.openRoom(room.name);
+    await rooms.updateRoom(updatedRoom);
+    await expect(rooms.roomRow(room.name)).toContainText(
+      `${updatedRoom.name}${updatedRoom.type}${updatedRoom.accessible}${updatedRoom.price}${updatedRoom.features.join(', ')}`,
+    );
+  } finally {
+    await rooms.deleteRoomIfPresent(room.name);
+  }
+
+  await expect(rooms.roomRow(room.name)).toHaveCount(0);
+});
+
+test('guest reservation is created, verified, updated, and deleted through the UI @ui-authenticated @regression', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90_000);
+  const home = new HomePage(page);
+  const reservation = new ReservationPage(page);
+  const bookings = new AdminBookingsPage(page);
+  const suffix = `${testInfo.workerIndex}-${Date.now()}`;
+  const guest = createReservationGuestData(suffix);
+  const dates = createValidReservationData();
+  let bookedRoom: string | undefined;
+
+  try {
+    await home.goto();
+    await home.searchAvailability(dates.checkin, dates.checkout);
+    await home.openFirstRoom();
+    await reservation.completeReservation(guest);
+    await expect(reservation.confirmation).toBeVisible();
+
+    await bookings.goto(dates.checkin);
+    await expect(bookings.bookingEntry(guest.lastname)).toBeVisible({ timeout: 30_000 });
+    bookedRoom = await bookings.roomForBooking(guest.lastname);
+
+    await bookings.openRoomBooking(bookedRoom, guest.lastname);
+    await expect(bookings.bookingDetails()).toContainText(guest.firstname);
+    await expect(bookings.bookingDetails()).toContainText(guest.lastname);
+    await expect(bookings.bookingDetails()).toContainText(dates.checkin);
+    await expect(bookings.bookingDetails()).toContainText(dates.checkout);
+
+    await bookings.updateGuestName(`${guest.firstname}-Updated`, guest.lastname);
+    await expect(bookings.bookingDetails()).toContainText(`${guest.firstname}-Updated`);
+    await bookings.deleteOpenBooking();
+    await expect(bookings.bookingDetails(guest.lastname)).toHaveCount(0);
+  } finally {
+    await bookings.deleteBookingIfPresent(guest.lastname, bookedRoom);
+  }
 });
 
 // This additional flow targets the highest-value booking risk found during
