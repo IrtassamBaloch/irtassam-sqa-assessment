@@ -34,7 +34,7 @@ npm run test:api         # API project only
 npm run test:ui          # all UI projects
 npm run test:smoke       # five critical scenarios
 npm run test:sanity      # five environment-confidence scenarios
-npm run test:regression  # twelve regression scenarios
+npm run test:regression  # fourteen regression scenarios
 npm run typecheck        # TypeScript compilation without output
 npm run report           # open the latest HTML report
 ```
@@ -45,18 +45,20 @@ npm run report           # open the latest HTML report
 config/
   env.ts                         validated environment contract
 pages/
+  AdminBookingsPage.ts           admin booking verification and CRUD actions
   AdminLoginPage.ts              admin login actions and feedback
-  AdminRoomsPage.ts              protected room-management page
+  AdminRoomsPage.ts              protected room-management CRUD actions
   ContactFormComponent.ts        contact form actions and results
   HomePage.ts                    availability search and room selection
-  ReservationPage.ts             reservation price-summary locators
+  ReservationPage.ts             reservation form and price-summary behavior
 playwright/.auth/
   admin.json                     generated authenticated cookie state
 test-data/
   api/booking.data.ts            typed booking factories and boundary data
   ui/admin.data.ts               invalid login and dashboard expectations
   ui/contact.data.ts             contact fixtures and unique-data factory
-  ui/reservation.data.ts         valid and reversed booking dates
+  ui/reservation.data.ts         generated guests, valid dates, and reversed dates
+  ui/room.data.ts                room create and update fixtures
 tests/
   api/booking-api.spec.ts        API contract and lifecycle coverage
   auth/admin.setup.ts            one-time UI login setup
@@ -82,4 +84,4 @@ Known API quirks are asserted exactly: failed authentication returns HTTP 200 wi
 
 ## Public Sandbox Notes
 
-The services are shared and occasionally slow. A timeout or reset is an environment signal, not a reason to loosen business assertions. API tests clean up their generated bookings where possible. The UI contact test submits synthetic data, while reservation and admin-room regression tests avoid persistent writes.
+The services are shared and occasionally slow. A timeout or reset is an environment signal, not a reason to loosen business assertions. API tests clean up their generated bookings where possible. The UI contact test submits synthetic data. The room and reservation CRUD tests create unique records and delete them through the UI in `finally` cleanup blocks.

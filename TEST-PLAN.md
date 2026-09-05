@@ -20,6 +20,8 @@ The suite checks behavior at public boundaries: HTTP contracts, stored booking s
 - Contact-form submission and validation.
 - Valid and invalid admin login.
 - Reuse of authenticated admin browser state.
+- Admin room create, read, update, and delete through the UI.
+- Guest reservation creation plus admin-side read, update, and delete through the UI.
 - Reversed UI booking dates and the resulting price calculation.
 
 ### Out of scope
@@ -30,7 +32,7 @@ The suite checks behavior at public boundaries: HTTP contracts, stored booking s
 - Cross-browser coverage beyond Chromium.
 - Native mobile testing.
 - Database-level verification and third-party service validation.
-- Creating or modifying persistent admin rooms during automated regression.
+- Permanent test-data seeding outside records owned and cleaned up by each scenario.
 
 ## Test Environment
 
@@ -79,15 +81,17 @@ The logged-out UI exposes misleading navigation, and API auth failures return HT
 | Admin UI | Valid login reaches protected rooms | X | X | | |
 | Admin UI | Invalid login remains logged out | | | X | X |
 | Admin UI | Saved cookie state opens protected rooms | | X | X | |
+| Room UI | Admin creates, reads, updates, and deletes a room | | | X | |
+| Reservation UI | Guest creates; admin reads, updates, and deletes booking | | | X | |
 | Reservation UI | Reversed dates produce negative total | | | X | X |
 
 ## Tagging Strategy
 
 - `@smoke`: five business-critical checks used as a build gate.
 - `@sanity`: five focused checks for quick environment confidence.
-- `@regression`: twelve broader behavior and boundary checks.
+- `@regression`: fourteen broader behavior and boundary checks.
 
-There are 16 executable scenarios plus one authentication setup test, for 17 discovered tests. Tag runs involving the authenticated dashboard also execute its `auth-setup` dependency.
+There are 18 executable scenarios plus one authentication setup test, for 19 discovered tests. Tag runs involving the authenticated dashboard also execute its `auth-setup` dependency.
 
 ## Playwright Projects
 
@@ -108,4 +112,4 @@ Testing can start when dependencies, Chromium, and all six `.env` values are ava
 - The public sandboxes can respond slowly or reset without notice; environment failures must be distinguished from assertion failures.
 - Browser coverage is Chromium only.
 - Contact submission writes a synthetic message to the public sandbox; data uniqueness reduces collisions but the UI offers no public cleanup path.
-- The suite does not submit a reservation or mutate admin room data during regression. Those flows were explored manually and are documented separately.
+- Room and reservation CRUD tests write to the shared sandbox, use unique data, and delete owned records through the UI in `finally` blocks. A terminated run can leave temporary records that require manual cleanup.

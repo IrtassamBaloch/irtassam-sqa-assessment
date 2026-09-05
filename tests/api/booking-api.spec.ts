@@ -55,6 +55,8 @@ test.describe('Booking API', () => {
     expect((await response.json()).token).toEqual(expect.any(String));
   });
 
+  // The API's documented quirk returns HTTP 200 for rejected credentials, so
+  // the reason body, rather than a 4xx status, proves authentication failed.
   test('invalid credentials return the documented reason @regression', async ({ request }) => {
     const response = await request.post('/auth', {
       data: { username: 'wrong', password: 'nope' },
@@ -136,6 +138,8 @@ test.describe('Booking API', () => {
     }
   });
 
+  // Actual sandbox behavior is HTTP 500 with plain text rather than a 400
+  // validation response; this assertion records that defect without masking it.
   test('missing firstname returns an internal server error @regression', async ({ request }) => {
     const response = await request.post('/booking', { data: bookingWithoutFirstname() });
     expect(response.status()).toBe(500);
