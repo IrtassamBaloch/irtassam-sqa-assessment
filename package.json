@@ -5,12 +5,16 @@
   "scripts": {
     "prepare": "npx playwright install chromium",
     "test": "npx playwright test",
-    "test:api": "npx playwright test tests/api",
-    "test:ui": "npx playwright test tests/ui",
-    "test:smoke": "npx playwright test --grep @smoke"
+    "test:api": "npx playwright test --project=api",
+    "test:ui": "npx playwright test --project=ui-login --project=ui-public --project=ui-authenticated",
+    "test:smoke": "npx playwright test --grep @smoke",
+    "test:sanity": "npx playwright test --grep @sanity",
+    "test:regression": "npx playwright test --grep @regression",
+    "report": "npx playwright show-report"
   },
   "devDependencies": {
     "@playwright/test": "^1.37.0",
+    "@types/node": "^20.0.0",
     "typescript": "^5.1.6"
   }
 }
