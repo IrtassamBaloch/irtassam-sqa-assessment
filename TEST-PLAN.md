@@ -26,8 +26,7 @@ The suite checks behavior at public boundaries: HTTP contracts, stored booking s
 
 ### Out of scope
 
-- Payments; `totalprice` is only a sandbox field.
-- Load and performance testing against shared public infrastructure.
+- Payments; `totalprice` is only a field.
 - Penetration testing beyond authentication and authorization checks.
 - Cross-browser coverage beyond Chromium.
 - Native mobile testing.

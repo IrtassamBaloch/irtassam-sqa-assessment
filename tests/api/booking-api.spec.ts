@@ -138,7 +138,7 @@ test.describe('Booking API', () => {
     }
   });
 
-  // Actual sandbox behavior is HTTP 500 with plain text rather than a 400
+  // Actual API behavior is HTTP 500 with plain text rather than a 400
   // validation response; this assertion records that defect without masking it.
   test('missing firstname returns an internal server error @regression', async ({ request }) => {
     const response = await request.post('/booking', { data: bookingWithoutFirstname() });
@@ -191,7 +191,7 @@ test.describe('Booking API', () => {
   });
 
   // Bonus: reversed dates threaten availability and billing calculations, so
-  // the regression pins the sandbox's observed validation gap.
+  // the regression records the API's observed validation gap.
   test('checkout before checkin is wrongly accepted @regression', async ({ request }) => {
     const created = await createBooking(request, reversedDateBookingData);
     const token = await login(request);
